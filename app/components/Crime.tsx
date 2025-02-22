@@ -130,6 +130,7 @@ export default function CrimeMap() {
           display: "none",
           boxShadow: "0 2px 5px rgba(0,0,0,0.3)",
         }}
+        className="text-black text-opacity-55 w-36"
       ></div>
     </div>
   );
