@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import "ol/ol.css"; // OpenLayers CSS
 import Map from "ol/Map";
 import View from "ol/View";
@@ -32,10 +32,15 @@ export default function CrimeMap() {
   const mapRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<Overlay | null>(null);
+  const [mapView, setMapView] = useState<View | null>(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
 
+    const view = new View({
+      center: fromLonLat([-100, 30]), // Default center
+      zoom: 4,
+    });
     // **Initialize Map**
     const map = new Map({
       target: mapRef.current,
@@ -44,11 +49,10 @@ export default function CrimeMap() {
           source: new OSM(),
         }),
       ],
-      view: new View({
-        center: fromLonLat([-100, 30]), // Center over North America
-        zoom: 4,
-      }),
+      view,
     });
+
+    setMapView(view);
 
     // **Create Features for Each City**
     const features = cities.map((city) => {
@@ -116,6 +120,22 @@ export default function CrimeMap() {
       map.setTarget(undefined);
     };
   }, []);
+
+  // **Get User Location and Center Map**
+  useEffect(() => {
+    if (!mapView) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log("User Location:", latitude, longitude);
+        mapView.setCenter(fromLonLat([longitude, latitude])); // Move map to user
+        mapView.setZoom(12); // Zoom closer
+      },
+      (error) => console.error("Location Error:", error),
+      { enableHighAccuracy: true }
+    );
+  },[mapView]);
 
   return (
     <div style={{ width: "100%", height: "100vh", position: "relative" }}>

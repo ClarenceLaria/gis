@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import GoogleCrimeMap from "./components/GoogleMaps";
 
 const CrimeMap = dynamic(() => import("@/app/components/Crime"));
 
