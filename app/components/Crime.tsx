@@ -10,7 +10,7 @@ import { Feature } from "ol";
 import { Point } from "ol/geom";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
-import { Style, Icon, Fill, Stroke, Circle as CircleStyle } from "ol/style";
+import { Style, Icon, Fill, Stroke, Circle as CircleStyle, RegularShape } from "ol/style";
 import Overlay from "ol/Overlay";
 
 // **Crime Data**
@@ -32,15 +32,11 @@ export default function CrimeMap() {
   const mapRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<Overlay | null>(null);
-  const [mapView, setMapView] = useState<View | null>(null);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
   useEffect(() => {
     if (!mapRef.current) return;
 
-    const view = new View({
-      center: fromLonLat([-100, 30]), // Default center
-      zoom: 4,
-    });
     // **Initialize Map**
     const map = new Map({
       target: mapRef.current,
@@ -49,15 +45,16 @@ export default function CrimeMap() {
           source: new OSM(),
         }),
       ],
-      view,
+      view: new View({
+        center: fromLonLat([-100, 30]), // Default center over North America
+        zoom: 4,
+      }),
     });
-
-    setMapView(view);
 
     // **Create Features for Each City**
     const features = cities.map((city) => {
       const feature = new Feature({
-        geometry: new Point(fromLonLat([city.lon, city.lat])),
+        geometry: new Point(fromLonLat([city.lon, city.lat])), // Convert lon/lat to OpenLayers coordinates
         name: city.name,
         rank: city.rank,
         crimes: city.crimes,
@@ -116,26 +113,55 @@ export default function CrimeMap() {
       }
     });
 
+    // **Create Star Shape for User Location**
+    const userFeature = new Feature({
+      geometry: new Point(fromLonLat([-100, 30])), // Default point
+    });
+
+    const userStyle = new Style({
+      image: new RegularShape({
+        points: 5, // Defines a star shape
+        radius: 10, // Outer radius
+        radius2: 4, // Inner radius for star effect
+        angle: 0, // Orientation of the star
+        fill: new Fill({ color: "yellow" }),
+        stroke: new Stroke({ color: "black", width: 2 }),
+      }),
+    });
+
+    userFeature.setStyle(userStyle);
+
+    const userLayer = new VectorLayer({
+      source: new VectorSource({
+        features: [userFeature],
+      }),
+    });
+
+    map.addLayer(userLayer);
+
+    // **Get User Location and Update Star Position**
+    navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation([longitude, latitude]);
+
+        const coordinates = fromLonLat([longitude, latitude]);
+        userFeature.setGeometry(new Point(coordinates));
+
+        // Center map on user’s location when first fetched
+        map.getView().setCenter(coordinates);
+        map.getView().setZoom(12);
+      },
+      (error) => {
+        console.error("Geolocation Error:", error);
+      },
+      { enableHighAccuracy: true }
+    );
+
     return () => {
       map.setTarget(undefined);
     };
   }, []);
-
-  // **Get User Location and Center Map**
-  useEffect(() => {
-    if (!mapView) return;
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        console.log("User Location:", latitude, longitude);
-        mapView.setCenter(fromLonLat([longitude, latitude])); // Move map to user
-        mapView.setZoom(12); // Zoom closer
-      },
-      (error) => console.error("Location Error:", error),
-      { enableHighAccuracy: true }
-    );
-  },[mapView]);
 
   return (
     <div style={{ width: "100%", height: "100vh", position: "relative" }}>
