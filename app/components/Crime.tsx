@@ -32,8 +32,13 @@ export default function CrimeMap() {
   const mapRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<Overlay | null>(null);
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [userFeature, setUserFeature] = useState<Feature | null>(null);
+  const [town, setTown] = useState<string | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
+  const [userLatitude, setUserLatitude] = useState<number | null>(null);
+  const [userLongitude, setUserLongitude] = useState<number | null>(null);
 
+  console.log("Your Location:", town, country, userLatitude, userLongitude);
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -46,15 +51,15 @@ export default function CrimeMap() {
         }),
       ],
       view: new View({
-        center: fromLonLat([-100, 30]), // Default center over North America
+        center: fromLonLat([-100, 30]), // Center over North America
         zoom: 4,
       }),
     });
 
-    // **Create Features for Each City**
-    const features = cities.map((city) => {
+    // **Create Features for Each Crime City**
+    const crimeFeatures = cities.map((city) => {
       const feature = new Feature({
-        geometry: new Point(fromLonLat([city.lon, city.lat])), // Convert lon/lat to OpenLayers coordinates
+        geometry: new Point(fromLonLat([city.lon, city.lat])),
         name: city.name,
         rank: city.rank,
         crimes: city.crimes,
@@ -73,14 +78,14 @@ export default function CrimeMap() {
       return feature;
     });
 
-    // **Add Features to Vector Layer**
-    const vectorLayer = new VectorLayer({
+    // **Add Crime Cities to a Layer**
+    const crimeLayer = new VectorLayer({
       source: new VectorSource({
-        features: features,
+        features: crimeFeatures,
       }),
     });
 
-    map.addLayer(vectorLayer);
+    map.addLayer(crimeLayer);
 
     // **Create Overlay for Popups**
     const overlay = new Overlay({
@@ -92,19 +97,31 @@ export default function CrimeMap() {
     map.addOverlay(overlay);
     overlayRef.current = overlay;
 
-    // **Click Event to Show Popup**
+    // **Click Event for Popups**
     map.on("click", (event) => {
       const feature = map.forEachFeatureAtPixel(event.pixel, (feat) => feat);
       if (feature) {
         const coordinates = (feature.getGeometry() as Point)?.getCoordinates();
         overlay.setPosition(coordinates);
 
+        const rank = feature.get("rank");
+        const crimes = feature.get("crimes");
+
         if (popupRef.current) {
-          popupRef.current.innerHTML = `
-            <strong>${feature.get("name")}</strong><br>
-            Rank: ${feature.get("rank")}<br>
-            Crimes: ${feature.get("crimes")}
-          `;
+            if(rank !== undefined && crimes !== undefined ){
+                popupRef.current.innerHTML = `
+                    <strong>${feature.get("name")}</strong><br>
+                    Rank: ${feature.get("rank")}<br>
+                    Crimes: ${feature.get("crimes")}
+                `;
+            } else {
+                popupRef.current.innerHTML = `
+                    <strong>Your Location</strong><br>
+                    Town: ${town}<br>
+                    Country: ${country}<br>
+                    Latitude: ${userLatitude}, Longitude: ${userLongitude}
+                `;
+            }
           popupRef.current.style.display = "block";
         }
       } else {
@@ -113,47 +130,59 @@ export default function CrimeMap() {
       }
     });
 
-    // **Create Star Shape for User Location**
-    const userFeature = new Feature({
-      geometry: new Point(fromLonLat([-100, 30])), // Default point
-    });
-
-    const userStyle = new Style({
-      image: new RegularShape({
-        points: 5, // Defines a star shape
-        radius: 10, // Outer radius
-        radius2: 4, // Inner radius for star effect
-        angle: 0, // Orientation of the star
-        fill: new Fill({ color: "yellow" }),
-        stroke: new Stroke({ color: "black", width: 2 }),
-      }),
-    });
-
-    userFeature.setStyle(userStyle);
-
-    const userLayer = new VectorLayer({
-      source: new VectorSource({
-        features: [userFeature],
-      }),
-    });
-
-    map.addLayer(userLayer);
-
-    // **Get User Location and Update Star Position**
-    navigator.geolocation.watchPosition(
-      (position) => {
+    // **Get User's Current Location**
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
         const { latitude, longitude } = position.coords;
-        setUserLocation([longitude, latitude]);
+        const userCoords = fromLonLat([longitude, latitude]);
 
-        const coordinates = fromLonLat([longitude, latitude]);
-        userFeature.setGeometry(new Point(coordinates));
+        const userFeature = new Feature({
+          geometry: new Point(userCoords),
+          name: "Your Location",
+        });
 
-        // Center map on user’s location when first fetched
-        map.getView().setCenter(coordinates);
+        
+        userFeature.setStyle(
+          new Style({
+            image: new RegularShape({
+              points: 5, // Star shape
+              radius: 10,
+              radius2: 4,
+              fill: new Fill({ color: "yellow" }),
+              stroke: new Stroke({ color: "black", width: 2 }),
+            }),
+          })
+        );
+
+        setUserFeature(userFeature);
+
+        // **Add User Marker to Map**
+        const userLayer = new VectorLayer({
+          source: new VectorSource({
+            features: [userFeature],
+          }),
+        });
+
+        map.addLayer(userLayer);
+
+        // **Fetch Nearest Town Name**
+        const results = await fetchNearestTown(latitude, longitude);
+        setUserLatitude(latitude);
+        setUserLongitude(longitude);
+        if (results) {
+          const town = results.town;
+          const country = results.country;
+          setCountry(country);
+          setTown(town);
+          console.log("Your Location:", town, country);
+        }
+
+        // **Reposition Map to User's Location**
+        map.getView().setCenter(userCoords);
         map.getView().setZoom(12);
       },
       (error) => {
-        console.error("Geolocation Error:", error);
+        console.error("Error getting location:", error);
       },
       { enableHighAccuracy: true }
     );
@@ -162,6 +191,39 @@ export default function CrimeMap() {
       map.setTarget(undefined);
     };
   }, []);
+
+  // **Fetch Town Name**
+  async function fetchNearestTown(lat: number, lon: number) {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`
+      );
+      const data = await response.json();
+
+      const town = data.address.town || data.address.city || "Unknown";
+      const country = data.address.country || "Unknown";
+
+      if (overlayRef.current && userFeature) {
+        const coordinates = (userFeature.getGeometry() as Point)?.getCoordinates();
+        overlayRef.current.setPosition(coordinates);
+
+        if (popupRef.current) {
+          popupRef.current.innerHTML = `
+            <strong>Your Location</strong><br>
+            Town: ${town}<br>
+            Country: ${country}<br>
+            Latitude: ${lat.toFixed(4)}, Longitude: ${lon.toFixed(4)}
+          `;
+          popupRef.current.style.display = "block";
+        }
+    }
+    console.log("Your Location:", town, country);
+    return {town, country};
+    
+    } catch (error) {
+      console.error("Error fetching location details:", error);
+    }
+  }
 
   return (
     <div style={{ width: "100%", height: "100vh", position: "relative" }}>
@@ -175,6 +237,7 @@ export default function CrimeMap() {
           borderRadius: "5px",
           display: "none",
           boxShadow: "0 2px 5px rgba(0,0,0,0.3)",
+          zIndex: 100,
         }}
         className="text-black text-opacity-55 w-36"
       ></div>
