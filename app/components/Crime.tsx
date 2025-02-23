@@ -37,6 +37,7 @@ export default function CrimeMap() {
   const [country, setCountry] = useState<string | null>(null);
   const [userLatitude, setUserLatitude] = useState<number | null>(null);
   const [userLongitude, setUserLongitude] = useState<number | null>(null);
+  const [state, setState] = useState<string | null>(null);
 
   console.log("Your Location:", town, country, userLatitude, userLongitude);
   useEffect(() => {
@@ -118,6 +119,7 @@ export default function CrimeMap() {
                 popupRef.current.innerHTML = `
                     <strong>Your Location</strong><br>
                     Town: ${town}<br>
+                    County: ${state}<br>
                     Country: ${country}<br>
                     Latitude: ${userLatitude}, Longitude: ${userLongitude}
                 `;
@@ -172,8 +174,10 @@ export default function CrimeMap() {
         if (results) {
           const town = results.town;
           const country = results.country;
+          const state = results.state;
           setCountry(country);
           setTown(town);
+          setState(state);
           console.log("Your Location:", town, country);
         }
 
@@ -190,7 +194,7 @@ export default function CrimeMap() {
     return () => {
       map.setTarget(undefined);
     };
-  }, [town, country, userLatitude, userLongitude]);
+  }, [town, country, state, userLatitude, userLongitude]);
 
   // **Fetch Town Name**
   async function fetchNearestTown(lat: number, lon: number) {
@@ -200,15 +204,16 @@ export default function CrimeMap() {
       );
       const data = await response.json();
 
-      const town = data.address.town || data.address.city || data.address.village || "Unknown";
+      const town = data.address.town || data.address.city || "Unknown";
       const county = data.address.county || "Unknown";
+      const state = data.address.state || "Unknown";
       const country = data.address.country || "Unknown";
 
       if (overlayRef.current && userFeature) {
         const coordinates = (userFeature.getGeometry() as Point)?.getCoordinates();
         overlayRef.current.setPosition(coordinates);
     }
-    return {town, country};
+    return {town, state, country};
     
     } catch (error) {
       console.error("Error fetching location details:", error);
