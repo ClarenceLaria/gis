@@ -190,7 +190,7 @@ export default function CrimeMap() {
     return () => {
       map.setTarget(undefined);
     };
-  }, []);
+  }, [town, country, userLatitude, userLongitude]);
 
   // **Fetch Town Name**
   async function fetchNearestTown(lat: number, lon: number) {
@@ -200,24 +200,14 @@ export default function CrimeMap() {
       );
       const data = await response.json();
 
-      const town = data.address.town || data.address.city || "Unknown";
+      const town = data.address.town || data.address.city || data.address.village || "Unknown";
+      const county = data.address.county || "Unknown";
       const country = data.address.country || "Unknown";
 
       if (overlayRef.current && userFeature) {
         const coordinates = (userFeature.getGeometry() as Point)?.getCoordinates();
         overlayRef.current.setPosition(coordinates);
-
-        if (popupRef.current) {
-          popupRef.current.innerHTML = `
-            <strong>Your Location</strong><br>
-            Town: ${town}<br>
-            Country: ${country}<br>
-            Latitude: ${lat.toFixed(4)}, Longitude: ${lon.toFixed(4)}
-          `;
-          popupRef.current.style.display = "block";
-        }
     }
-    console.log("Your Location:", town, country);
     return {town, country};
     
     } catch (error) {
