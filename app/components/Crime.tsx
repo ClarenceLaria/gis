@@ -54,6 +54,7 @@ export default function CrimeMap() {
       view: new View({
         center: fromLonLat([-100, 30]), // Center over North America
         zoom: 4,
+        projection: 'EPSG:3857'
       }),
     });
 
