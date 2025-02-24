@@ -40,9 +40,15 @@ export default function CrimeHeatMap() {
       source: new VectorSource({
         features: crimeFeatures,
       }),
-      blur: 15, // Adjust blur for smoother effect
-      radius: 10, // Adjust spread of heat points
-      weight: (feature) => feature.get("weight") || 0.5, // Use intensity values
+      blur: 20, // Adjust blur for smoother effect
+      radius: 15, // Adjust spread of heat points
+      weight: (feature) => {
+        const intensity = feature.get("weight") || 0.5;
+        
+        if (intensity >= 0.8) return 1.0; // 🔴 High danger
+        if (intensity >= 0.5) return 0.6; // 🟡 Moderate danger
+        return 0.2; // the rest are safe 🟢
+        }, // Use intensity values
       gradient: ["green", "yellow", "red"], // Color gradient
     });
 
@@ -65,6 +71,7 @@ export default function CrimeHeatMap() {
   return (
     <div style={{position: "relative"}}>
         <div ref={mapRef} style={{ width: "100%", height: "100vh" }}></div>
+        {/* Legend Box */}
         <div
         style={{
             position: "absolute",
